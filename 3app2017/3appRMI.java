@@ -42,12 +42,12 @@ class Scacchiera extends UnicastRemoteObject implements ScacchieraInterface {
         this.ngiocatori_finefase1++;
         synchronized (lock_colore){
 			try{
-				if( this.ngiocatori_finefase1<2){
-			    	this.lock_colore.notify();					
+				if( this.ngiocatori_finefase1<2){	
 					this.lock_colore.wait();
 				}
 				this.ngiocatori_finefase1++;
 				if(this.ngiocatori_finefase1==3)this.swap();
+				this.lock_colore.notify();	
 			}
 			catch(InterruptedException e){}
         }
