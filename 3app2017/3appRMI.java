@@ -23,9 +23,8 @@ public interface ScacchieraInterface extends Remote{
     public static final int NCOLONNE = 8;
     public int add(int riga, int colonna)throws RemoteException;
     public void swap()throws RemoteException;
-    public Object setColore()throws RemoteException;
+    public void setColore()throws RemoteException;
     public int getColore()throws RemoteException;
-
 }
 
 class Scacchiera extends UnicastRemoteObject implements ScacchieraInterface {
@@ -39,11 +38,18 @@ class Scacchiera extends UnicastRemoteObject implements ScacchieraInterface {
         return this.ngiocatori_finefase1;
     }
 
-    synchronized public Object setColore(){
+    synchronized public void setColore(){          
+        this.ngiocatori_finefase1++;
         synchronized (lock_colore){
-            this.ngiocatori_finefase1++;
-            this.lock_colore.notifyAll();
-            return this.lock_colore;
+			try{
+				if( this.ngiocatori_finefase1<2){
+			    	this.lock_colore.notify();					
+					this.lock_colore.wait();
+				}
+				this.ngiocatori_finefase1++;
+				if(this.ngiocatori_finefase1==3)this.swap();
+			}
+			catch(InterruptedException e){}
         }
     }
 
@@ -53,6 +59,7 @@ class Scacchiera extends UnicastRemoteObject implements ScacchieraInterface {
             board[i] = new Casella(bianco); bianco = !bianco;
         }
     }
+ 
 
     public void swap(){for(Casella c: board) c.swapColor(); }
 
@@ -71,6 +78,7 @@ interface GiocatoreInterface extends Remote, Runnable{
     public int getScore()throws RemoteException;
     public void run()throws RemoteException;
 }
+
 class Giocatore extends UnicastRemoteObject implements GiocatoreInterface{
     private String name;
     private ScacchieraInterface scacchiera;
@@ -92,20 +100,8 @@ class Giocatore extends UnicastRemoteObject implements GiocatoreInterface{
             int c=((int)(Math.random()*10))%ScacchieraInterface.NCOLONNE;
             score +=scacchiera.add(r,c);
         }
-        Object lock=scacchiera.setColore();
 
-        synchronized(lock){
-            try{
-                while(scacchiera.getColore()<2){
-                    lock.wait();
-                }
-                if(scacchiera.getColore()==2){
-                    scacchiera.swap();
-
-                    scacchiera.setColore();
-                }
-            }catch(InterruptedException e){}
-        }
+        s.setColore();
 
         for(int i=0; i<30; i++){
             int r=((int)(Math.random()*10))%ScacchieraInterface.NRIGHE;
@@ -113,6 +109,7 @@ class Giocatore extends UnicastRemoteObject implements GiocatoreInterface{
             score +=scacchiera.add(r,c);
         }
         this.finito=true;
+		
     }
 
 }
@@ -122,10 +119,6 @@ public class SERVER {
         Naming.rebind("s",s);
         GiocatoreInterface g1=(GiocatoreInterface)Naming.lookup("g1");
         GiocatoreInterface g2=(GiocatoreInterface)Naming.lookup("g2");
-        /*
-            ??
-        g1.join();
-        g2.join();*/
 
         while(!g1.isFinito()||!g2.isFinito()){
             try{
@@ -145,11 +138,9 @@ public class CLIENT1 {
         Naming.rebind("g2",g2);
 
         Thread t=new Thread(g2);
-
         t.start();
-
         t.join();
-
+		
         System.out.println("totale GIOCATORE 2 " + g2.getScore());
 
     }
@@ -160,14 +151,10 @@ public class CLIENT2 {
         ScacchieraInterface s=(ScacchieraInterface)Naming.lookup("s");
 
         Runnable g1=new Giocatore("pippo",s);
-
         Naming.rebind("g1",g1);
-
-      //  Thread t=new Thread((Runnable)g1);
+		
         Thread t=new Thread(g1);
-
         t.start();
-
         t.join();
 
         System.out.println("totale GIOCATORE 1 " +  g1.getScore());
